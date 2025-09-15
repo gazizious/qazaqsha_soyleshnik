@@ -37,6 +37,19 @@ PHRASES = [
     "Челюсть не та?",
 ]
 
+# Буквы, уникальные для русского и казахского
+RUS_ONLY = set("ёыэщцчъь")
+KAZ_ONLY = set("әңөүұүқһі")
+
+def looks_like_russian(text: str) -> bool:
+    """Проверяем текст по алфавиту"""
+    text = text.lower()
+    if any(ch in KAZ_ONLY for ch in text):
+        return False  # похоже на казахский
+    if any(ch in RUS_ONLY for ch in text):
+        return True   # похоже на русский
+    return False
+
 # Храним время последнего ответа для каждого чата
 last_trigger_time = {}
 THRESHOLD = 0.75  # порог уверенности fastText
@@ -51,16 +64,16 @@ async def detect_language(message: Message):
     if not text:
         return
 
-    # Определяем язык
+    # Определяем язык fastText
     prediction = model.predict(text, k=1)
     lang = prediction[0][0].replace("__label__", "")
     confidence = prediction[1][0]
 
-    if lang == "ru" and confidence >= THRESHOLD:
+    if (lang == "ru" and confidence >= THRESHOLD) or looks_like_russian(text):
         now = asyncio.get_event_loop().time()
         chat_id = message.chat.id
 
-        # Раз в 2 минуты на чат
+        # Ограничение: раз в 2 минуты на чат
         if chat_id not in last_trigger_time or (now - last_trigger_time[chat_id]) > 120:
             last_trigger_time[chat_id] = now
             phrase = random.choice(PHRASES)
