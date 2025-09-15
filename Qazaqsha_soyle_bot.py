@@ -43,7 +43,7 @@ THRESHOLD = 0.75  # порог уверенности fastText
 
 @dp.message(Command("start"))
 async def start_handler(message: Message):
-    await message.answer("Салем! Я слежу, чтобы писали қазақша 🙂")
+    await message.answer("Сәлем! Мені чатқа қосып, қазақ тілі қолданысын қадағалайық!")
 
 @dp.message()
 async def detect_language(message: Message):
