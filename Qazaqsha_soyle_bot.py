@@ -2,21 +2,26 @@ import os
 import asyncio
 import random
 import fasttext
+import urllib.request
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import Command
 
-# Загружаем токен из Railway Variables
+# Telegram токен берём из переменной Railway
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# Путь к модели fastText
 MODEL_PATH = "lid.176.bin"
+MODEL_URL = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"
+
+# Скачиваем модель, если её нет
 if not os.path.exists(MODEL_PATH):
-    import urllib.request
-    url = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"
-    urllib.request.urlretrieve(url, MODEL_PATH)
+    print("📥 Скачиваю модель fastText...")
+    urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+
 model = fasttext.load_model(MODEL_PATH)
 
 # Фразы, которые бот будет выдавать
@@ -32,11 +37,9 @@ PHRASES = [
     "Челюсть не та?",
 ]
 
-# Хранилище таймеров по чатам
+# Храним время последнего ответа для каждого чата
 last_trigger_time = {}
-
-# Порог уверенности для fastText
-THRESHOLD = 0.75
+THRESHOLD = 0.75  # порог уверенности fastText
 
 @dp.message(Command("start"))
 async def start_handler(message: Message):
@@ -53,12 +56,11 @@ async def detect_language(message: Message):
     lang = prediction[0][0].replace("__label__", "")
     confidence = prediction[1][0]
 
-    # Проверяем только если русский и уверенность достаточная
     if lang == "ru" and confidence >= THRESHOLD:
         now = asyncio.get_event_loop().time()
         chat_id = message.chat.id
 
-        # Проверка — прошло ли 2 минуты с последнего триггера
+        # Раз в 2 минуты на чат
         if chat_id not in last_trigger_time or (now - last_trigger_time[chat_id]) > 120:
             last_trigger_time[chat_id] = now
             phrase = random.choice(PHRASES)
