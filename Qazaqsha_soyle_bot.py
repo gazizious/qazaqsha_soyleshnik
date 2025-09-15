@@ -1,16 +1,22 @@
 import os
-import time
+import asyncio
 import random
-import urllib.request
 import fasttext
-from telegram.ext import ApplicationBuilder, MessageHandler, filters
+from aiogram import Bot, Dispatcher
+from aiogram.types import Message
+from aiogram.filters import Command
 
-# --- Настройки ---
-TOKEN = os.getenv("TOKEN")  # токен задаём через Railway Variables
+# Загружаем токен из Railway Variables
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+# Загружаем модель fastText (лучше заранее скачать lid.176.bin и положить рядом)
 MODEL_PATH = "lid.176.bin"
-MODEL_URL = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"
+model = fasttext.load_model(MODEL_PATH)
 
-# Фразы для ответа
+# Фразы, которые бот будет выдавать
 PHRASES = [
     "Розенбаум, қазақша жаз",
     "Қазақша жазшиш, ақұдай",
@@ -23,50 +29,37 @@ PHRASES = [
     "Челюсть не та?",
 ]
 
-# Таймер для ограничения частоты сообщений
-last_reply_time = 0
-COOLDOWN = 120  # секунд (2 минуты)
+# Хранилище таймеров по чатам
+last_trigger_time = {}
 
+# Порог уверенности для fastText
+THRESHOLD = 0.75
 
-# --- Проверка и загрузка модели ---
-def ensure_model():
-    if not os.path.exists(MODEL_PATH):
-        print("Скачиваю fastText модель (~600MB)...")
-        urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
-        print("Модель скачана.")
-    return fasttext.load_model(MODEL_PATH)
+@dp.message(Command("start"))
+async def start_handler(message: Message):
+    await message.answer("Салем! Я слежу, чтобы писали қазақша 🙂")
 
-
-model = ensure_model()
-
-
-# --- Обработчик сообщений ---
-async def check_message(update, context):
-    global last_reply_time
-    text = update.message.text
+@dp.message()
+async def detect_language(message: Message):
+    text = message.text
     if not text:
         return
 
-    # Предсказание языка
-    prediction = model.predict(text.replace("\n", " "), k=2)
+    # Определяем язык
+    prediction = model.predict(text, k=1)
     lang = prediction[0][0].replace("__label__", "")
-    prob = prediction[1][0]
+    confidence = prediction[1][0]
 
-    # Проверка русского языка
-    if lang == "ru" and prob >= 0.75:
-        now = time.time()
-        if now - last_reply_time >= COOLDOWN:
-            last_reply_time = now
+    # Проверяем только если русский и уверенность достаточная
+    if lang == "ru" and confidence >= THRESHOLD:
+        now = asyncio.get_event_loop().time()
+        chat_id = message.chat.id
+
+        # Проверка — прошло ли 2 минуты с последнего триггера
+        if chat_id not in last_trigger_time or (now - last_trigger_time[chat_id]) > 120:
+            last_trigger_time[chat_id] = now
             phrase = random.choice(PHRASES)
-            await update.message.reply_text(phrase)
-
-
-# --- Запуск бота ---
-def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_message))
-    app.run_polling()
-
+            await message.answer(phrase)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(dp.start_polling(bot))
