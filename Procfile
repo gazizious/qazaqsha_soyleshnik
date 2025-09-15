@@ -1,0 +1,1 @@
+worker: python Qazaqsha_soyle_bot.py
