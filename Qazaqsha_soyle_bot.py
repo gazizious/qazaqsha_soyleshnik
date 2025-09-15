@@ -12,8 +12,11 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Загружаем модель fastText (лучше заранее скачать lid.176.bin и положить рядом)
 MODEL_PATH = "lid.176.bin"
+if not os.path.exists(MODEL_PATH):
+    import urllib.request
+    url = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"
+    urllib.request.urlretrieve(url, MODEL_PATH)
 model = fasttext.load_model(MODEL_PATH)
 
 # Фразы, которые бот будет выдавать
